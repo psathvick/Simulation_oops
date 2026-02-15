@@ -1,18 +1,13 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
-/// <summary>
-/// This script handle all the control code, so detecting when the users click on a unit or building and selecting those
-/// If a unit is selected it will give the order to go to the clicked point or building when right clicking.
-/// </summary>
 public class UserControl : MonoBehaviour
 {
     public Camera GameCamera;
     public float PanSpeed = 10.0f;
     public GameObject Marker;
-    
+
     private Unit m_Selected = null;
 
     private void Start()
@@ -22,49 +17,81 @@ public class UserControl : MonoBehaviour
 
     private void Update()
     {
-        Vector2 move = new Vector2(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical"));
-        GameCamera.transform.position = GameCamera.transform.position + new Vector3(move.y, 0, -move.x) * PanSpeed * Time.deltaTime;
+        HandleCameraMovement();
+        HandleMouseSelection();
+        MarkerHandling();
+    }
 
-        if (Input.GetMouseButtonDown(0))
+    // =============================
+    // CAMERA MOVEMENT (WASD + Arrows)
+    // =============================
+    private void HandleCameraMovement()
+    {
+        var keyboard = Keyboard.current;
+        if (keyboard == null) return;
+
+        float horizontal = 0f;
+        float vertical = 0f;
+
+        if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
+            horizontal -= 1f;
+
+        if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
+            horizontal += 1f;
+
+        if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed)
+            vertical += 1f;
+
+        if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed)
+            vertical -= 1f;
+
+        Vector2 move = new Vector2(horizontal, vertical);
+        if (move.sqrMagnitude > 1f)
+            move.Normalize();
+
+        GameCamera.transform.position +=
+            new Vector3(move.y, 0f, -move.x) * PanSpeed * Time.deltaTime;
+    }
+
+    // =============================
+    // MOUSE INTERACTION
+    // =============================
+    private void HandleMouseSelection()
+    {
+        var mouse = Mouse.current;
+        if (mouse == null) return;
+
+        if (mouse.leftButton.wasPressedThisFrame)
         {
-            var ray = GameCamera.ScreenPointToRay(Input.mousePosition);
-            RaycastHit hit;
-            if (Physics.Raycast(ray, out hit))
+            Ray ray = GameCamera.ScreenPointToRay(mouse.position.ReadValue());
+
+            if (Physics.Raycast(ray, out RaycastHit hit))
             {
-                //the collider could be children of the unit, so we make sure to check in the parent
-                var unit = hit.collider.GetComponentInParent<Unit>();
-                m_Selected = unit;
-                
-                
-                //check if the hit object have a IUIInfoContent to display in the UI
-                //if there is none, this will be null, so this will hid the panel if it was displayed
+                m_Selected = hit.collider.GetComponentInParent<Unit>();
+
                 var uiInfo = hit.collider.GetComponentInParent<UIMainScene.IUIInfoContent>();
                 UIMainScene.Instance.SetNewInfoContent(uiInfo);
             }
         }
-        else if (m_Selected != null && Input.GetMouseButtonDown(1))
-        {//right click give order to the unit
-            var ray = GameCamera.ScreenPointToRay(Input.mousePosition);
-            RaycastHit hit;
-            if (Physics.Raycast(ray, out hit))
+        else if (m_Selected != null && mouse.rightButton.wasPressedThisFrame)
+        {
+            Ray ray = GameCamera.ScreenPointToRay(mouse.position.ReadValue());
+
+            if (Physics.Raycast(ray, out RaycastHit hit))
             {
                 var building = hit.collider.GetComponentInParent<Building>();
-                
+
                 if (building != null)
-                {
                     m_Selected.GoTo(building);
-                }
                 else
-                {
                     m_Selected.GoTo(hit.point);
-                }
             }
         }
-
-        MarkerHandling();
     }
-    
-    // Handle displaying the marker above the unit that is currently selected (or hiding it if no unit is selected)
+
+    // =============================
+    // MARKER HANDLING
+    // =============================
     void MarkerHandling()
     {
         if (m_Selected == null && Marker.activeInHierarchy)
@@ -77,6 +104,6 @@ public class UserControl : MonoBehaviour
             Marker.SetActive(true);
             Marker.transform.SetParent(m_Selected.transform, false);
             Marker.transform.localPosition = Vector3.zero;
-        }    
+        }
     }
 }
